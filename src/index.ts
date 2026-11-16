@@ -54,11 +54,15 @@ async function getVacancy() {
     if (vacancyList.length !== new Set(vacancyList.map((v) => v.link)).size) {
         console.warn('vacancy list has duplicates')
     }
-    // console.log(vacancyList);
+    if (vacancyList.length < data.vacanciesCount * 0.7) {
+        console.warn(`vacancy length less than 70%, was collect ${vacancyList.length} vacancies from ${data.vacanciesCount}`)
+    }
+
+    return vacancyList;
 
 }
 
 getVacancy().catch((err) => {
     console.error(err)
-    process.exit(1);
+    process.exitCode = 1
 })
