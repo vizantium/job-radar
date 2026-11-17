@@ -1,9 +1,27 @@
 import * as cheerio from 'cheerio';
 import {setTimeout} from 'node:timers/promises';
+import {Client} from "pg";
+
 
 type vacancy = { title: string, id: string, link: string }
 
 const baseUrl = 'https://www.rabota.md'
+
+const client = new Client({
+    user: process.env.POSTGRES_USER,
+    password: process.env.POSTGRES_PASSWORD,
+    host: 'localhost',
+    port: 5432,
+    database: process.env.POSTGRES_DB,
+})
+
+const getTime = async () => {
+    await client.connect()
+    console.log(await client.query('SELECT NOW()'))
+    await client.end()
+}
+
+getTime()
 
 const getVacancyFetch = async (page: string | number) => {
     const response = await fetch(`https://www.rabota.md/ru/vacancies/category/it/${page}`, {method: "POST", signal: AbortSignal.timeout(30000)})
@@ -62,7 +80,7 @@ async function getVacancy() {
 
 }
 
-getVacancy().catch((err) => {
-    console.error(err)
-    process.exitCode = 1
-})
+// getVacancy().catch((err) => {
+//     console.error(err)
+//     process.exitCode = 1
+// })

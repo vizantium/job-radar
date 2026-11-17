@@ -1,0 +1,24 @@
+# Use postgres/example user/password credentials
+
+services:
+  db:
+    image: postgres:17
+    container_name: postgres_container
+    restart: unless-stopped
+    shm_size: 128mb
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_job:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 9000:8080
+volumes:
+  db_job:
