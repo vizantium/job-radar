@@ -3,7 +3,7 @@ import {setTimeout} from 'node:timers/promises';
 import {Client} from "pg";
 
 
-type vacancy = { title: string, id: string, link: string }
+type vacancy = { title: string, vacancy_id: string, link: string }
 
 const baseUrl = 'https://www.rabota.md'
 
@@ -15,16 +15,11 @@ const client = new Client({
     database: process.env.POSTGRES_DB,
 })
 
-const getTime = async () => {
-    await client.connect()
-    console.log(await client.query('SELECT NOW()'))
-    await client.end()
-}
-
-getTime()
-
 const getVacancyFetch = async (page: string | number) => {
-    const response = await fetch(`https://www.rabota.md/ru/vacancies/category/it/${page}`, {method: "POST", signal: AbortSignal.timeout(30000)})
+    const response = await fetch(`https://www.rabota.md/ru/vacancies/category/it/${page}`, {
+        method: "POST",
+        signal: AbortSignal.timeout(30000)
+    })
     if (!response.ok) {
         throw new Error(`error on ${page} page with status ${response.status}`);
     }
@@ -46,16 +41,17 @@ async function getVacancy() {
             const link = $(el).find('a[title]')
             vacancyhtml.push({
                 title: link.attr('title').trim(),
-                id: $(el).attr('id').slice(6),
+                vacancy_id: $(el).attr('id').slice(6),
                 link: new URL(link.attr('href'), baseUrl).href,
             })
         }).get();
         $('.vacancyCardItem').map((index, el) => {
             const link = $(el).find('.vacancyShowPopup')
+            const url = new URL(link.attr('href'), baseUrl).href
             vacancyhtml.push({
                 title: link.find('span').text().trim(),
-                id: $(el).attr('data-vacancyid'),
-                link: new URL(link.attr('href'), baseUrl).href,
+                vacancy_id: url.match(/\/(\d+)$/)?.[1] ?? url,
+                link: url,
             })
         }).get()
         return vacancyhtml;
@@ -66,7 +62,6 @@ async function getVacancy() {
         const data = await setTimeout(1000, await getVacancyFetch(i + 1));
 
         vacancyList.push(...getVacancies(data.content))
-        // console.log('страница', i + 1, 'вакансий:', getVacancies(data.content).length);
     }
 
     if (vacancyList.length !== new Set(vacancyList.map((v) => v.link)).size) {
@@ -75,12 +70,25 @@ async function getVacancy() {
     if (vacancyList.length < data.vacanciesCount * 0.7) {
         console.warn(`vacancy length less than 70%, was collect ${vacancyList.length} vacancies from ${data.vacanciesCount}`)
     }
-
     return vacancyList;
 
 }
 
-// getVacancy().catch((err) => {
-//     console.error(err)
-//     process.exitCode = 1
-// })
+const main = async () => {
+    await client.connect()
+    const vacancies = await getVacancy()
+    for (const vacancy of vacancies) {
+        await client.query('INSERT INTO jobs (vacancy_id, url, title) VALUES ($1, $2, $3) ON CONFLICT (vacancy_id) DO UPDATE SET last_seen_at = NOW(), title = EXCLUDED.title, url = EXCLUDED.url',
+            [vacancy.vacancy_id, vacancy.link, vacancy.title]);
+    }
+    // const rows = await client.query('SELECT url, title FROM jobs WHERE sent_at IS NULL')
+    // console.log(rows.rowCount);
+}
+
+main().catch((err) => {
+    console.error(err)
+    process.exitCode = 1
+}).finally(async () => {
+        await client.end()
+    }
+)
